@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+simulator/.env
+simulator/.env.*
+!simulator/.env.example
+
+# Logs and runtime output
+*.log
+*.pid
+backend/dev.stdout.log
+backend/dev.stderr.log
+frontend/dev.stdout.log
+frontend/dev.stderr.log
+simulator/simulator.stdout.log
+simulator/simulator.stderr.log
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary reports
+tmp-*.pdf
+tmp-*.xlsx
+tmp-*.csv
+tmp-*.html
