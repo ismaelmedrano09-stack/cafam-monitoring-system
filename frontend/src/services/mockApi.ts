@@ -194,6 +194,7 @@ function buildDemoHtml() {
 }
 
 export function isDemoMode() {
+  if (!import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEMO !== 'true') return false;
   return localStorage.getItem('cafam_demo') === 'true';
 }
 

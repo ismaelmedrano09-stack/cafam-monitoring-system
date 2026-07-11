@@ -1,11 +1,6 @@
 SET NAMES utf8mb4;
 USE cafam_monitoring;
 
-INSERT INTO users (name, email, password_hash, role, status) VALUES
-('Administrador Cafam', 'admin@cafam.test', '$2b$10$KPSPo66tbSGEAvvaCBmxwekXlfPFOZ1hKIe1xSPL6Jz4TAtT4ORhC', 'administrador', 'active'),
-('Regente Farmacia', 'regente@cafam.test', '$2b$10$H7VB3Oaqko6n7GJNkaARFOSWLRQL6tczBLFkQU4WJnj8cI7he2XLO', 'regente_farmacia', 'active'),
-('Analista Calidad', 'calidad@cafam.test', '$2b$10$HwXnSIv.3GvF3bVyEsfAL.6I4PzE8aTnIlMvSWyPVFP5moJ0upmy.', 'calidad', 'active');
-
 INSERT INTO sites (code, name, address, city, latitude, longitude) VALUES
 ('CAFAM-CENTRAL', 'Clínica Cafam Central', 'Av. Carrera 68 # 90-88', 'Bogotá', 4.6923940, -74.0753710),
 ('CAFAM-CALLE93', 'Centro Médico Cafam Calle 93', 'Calle 93 # 14-20', 'Bogotá', 4.6760120, -74.0498260);
@@ -38,7 +33,7 @@ INSERT INTO notification_contacts (site_id, name, email, phone, channels, levels
 (NULL, 'Mantenimiento Biomédico', 'biomedica@cafam.test', '+57 300 555 0103', JSON_ARRAY('email','call'), JSON_ARRAY('informativa','advertencia','critica'));
 
 INSERT INTO device_files (sensor_id, name, category, notes, uploaded_by)
-SELECT id, CONCAT('Certificado de calibración - ', code), 'calibration', 'Registro documental inicial del equipo.', 1
+SELECT id, CONCAT('Certificado de calibración - ', code), 'calibration', 'Registro documental inicial del equipo.', NULL
 FROM sensors;
 
 INSERT INTO notification_logs (alarm_id, contact_id, channel, destination, status, provider_message, sent_at)
@@ -52,4 +47,4 @@ WHERE a.status IN ('abierta','en_atencion')
   AND JSON_CONTAINS(nc.levels, JSON_QUOTE(a.level));
 
 INSERT INTO audit_logs (user_id, action, entity, entity_id, description, ip_address) VALUES
-(1, 'seed_database', 'system', NULL, 'Datos semilla iniciales cargados', '127.0.0.1');
+(NULL, 'seed_database', 'system', NULL, 'Datos semilla iniciales cargados', '127.0.0.1');

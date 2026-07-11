@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import api from '../services/api';
 import { clearStoredSession, resetSessionExpiration } from '../services/session';
 
+const demoEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO === 'true';
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('cafam_token'),
@@ -21,7 +23,7 @@ export const useAuthStore = defineStore('auth', {
         payload = data.data;
         localStorage.removeItem('cafam_demo');
       } catch (error) {
-        if (email !== 'admin@cafam.test' || password !== 'Admin123*') throw error;
+        if (!demoEnabled || email !== 'admin@cafam.test' || password !== 'Admin123*') throw error;
         payload = {
           token: 'demo-token',
           user: { id: 1, name: 'Administrador Cafam', email, role: 'administrador', status: 'active' }

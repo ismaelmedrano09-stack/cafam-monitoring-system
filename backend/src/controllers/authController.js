@@ -19,6 +19,9 @@ function validatePublicRegistration({ name, email, password, role }) {
   if (!String(name || '').trim()) return 'El nombre completo es obligatorio';
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Ingresa un correo electrónico válido';
   if (!password || String(password).length < 8) return 'La contraseña debe tener mínimo 8 caracteres';
+  if (!/[A-ZÁÉÍÓÚÑ]/.test(password) || !/[a-záéíóúñ]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]/.test(password)) {
+    return 'La contraseña debe incluir mayúscula, minúscula, número y símbolo';
+  }
   if (role && !PUBLIC_ROLES.has(role)) return 'El rol seleccionado no está disponible para registro público';
   return null;
 }

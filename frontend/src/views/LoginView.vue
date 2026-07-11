@@ -32,7 +32,7 @@
           </div>
         </div>
 
-        <div class="login-note">
+        <div v-if="demoEnabled" class="login-note">
           Si MySQL no está activo, el usuario administrador abre un modo demo con datos simulados.
         </div>
         <div v-if="sessionExpired" class="login-note session-expired-note">
@@ -108,9 +108,10 @@ const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 const sessionExpired = computed(() => route.query.expired === '1');
+const demoEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO === 'true';
 const rememberedEmail = localStorage.getItem('cafam_remembered_email');
-const email = ref(rememberedEmail || 'admin@cafam.test');
-const password = ref('Admin123*');
+const email = ref(rememberedEmail || (demoEnabled ? 'admin@cafam.test' : ''));
+const password = ref(demoEnabled ? 'Admin123*' : '');
 const totpToken = ref('');
 const requiresTotp = ref(false);
 const loading = ref(false);
