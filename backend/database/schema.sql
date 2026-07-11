@@ -7,6 +7,7 @@ CREATE DATABASE IF NOT EXISTS cafam_monitoring
 USE cafam_monitoring;
 
 DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS push_subscriptions;
 DROP TABLE IF EXISTS threshold_changes;
 DROP TABLE IF EXISTS device_files;
 DROP TABLE IF EXISTS notification_logs;
@@ -27,6 +28,8 @@ CREATE TABLE users (
   status ENUM('active','inactive') NOT NULL DEFAULT 'active',
   confirmed_at DATETIME NULL,
   confirm_token VARCHAR(64) NULL,
+  totp_secret VARCHAR(64) NULL DEFAULT NULL,
+  totp_enabled TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -196,4 +199,15 @@ CREATE TABLE audit_logs (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_audit_action (action),
   CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE push_subscriptions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,
+  endpoint TEXT NOT NULL,
+  p256dh VARCHAR(255) NOT NULL,
+  auth VARCHAR(128) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_push_user (user_id),
+  CONSTRAINT fk_push_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
