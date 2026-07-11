@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const apiUrl = process.env.VITE_API_URL || 'http://localhost:4000/api';
+const escapedApiUrl = apiUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -14,7 +17,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^http:\/\/localhost:4000\/api\/(dashboard|sensors|alarms)/,
+            urlPattern: new RegExp(`^${escapedApiUrl}/(dashboard|sensors|alarms)`),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'cafam-api-cache',

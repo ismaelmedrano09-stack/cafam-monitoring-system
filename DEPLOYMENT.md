@@ -1,8 +1,47 @@
-# Guía de despliegue
+# Guia de despliegue
 
-Esta guía deja el proyecto listo para llevarlo a un VPS o servidor propio.
+Esta guia deja el proyecto listo para produccion. La arquitectura recomendada es:
 
-## 1. Preparar servidor
+- Frontend en Vercel.
+- Backend en VPS, Railway, Render o servidor Node dedicado.
+- MySQL en servicio administrado o servidor privado.
+- MQTT en servidor privado o broker administrado.
+
+## Frontend en Vercel
+
+El repositorio ya incluye configuracion para Vercel en dos escenarios:
+
+- Si importas el repositorio completo desde GitHub, Vercel puede usar el `vercel.json` de la raiz. Ese archivo instala dependencias en `frontend`, ejecuta el build y publica `frontend/dist`.
+- Si en Vercel configuras `Root Directory` como `frontend`, se usa `frontend/vercel.json`.
+
+Configuracion recomendada en Vercel:
+
+```text
+Framework Preset: Vite
+Root Directory: frontend
+Install Command: npm ci
+Build Command: npm run build
+Output Directory: dist
+```
+
+Variables de entorno para Vercel:
+
+```text
+VITE_API_URL=https://api.tu-dominio.com/api
+VITE_SOCKET_URL=https://api.tu-dominio.com
+```
+
+Importante: Vercel solo hospedara el frontend. El backend debe estar publicado en una URL HTTPS externa y esa URL debe coincidir con `VITE_API_URL`.
+
+En el backend debes configurar:
+
+```text
+FRONTEND_URL=https://tu-app.vercel.app
+```
+
+Eso permite CORS y hace que los correos de confirmacion apunten al frontend publico.
+
+## 1. Preparar servidor para backend
 
 Instala:
 
@@ -59,9 +98,11 @@ npm run build
 npm start
 ```
 
-Para producción se recomienda correrlo con `pm2`, systemd o un contenedor Docker dedicado.
+Para produccion se recomienda correrlo con `pm2`, systemd o un contenedor Docker dedicado.
 
-## 6. Frontend
+## 6. Frontend en servidor propio
+
+Si no usas Vercel y prefieres un servidor propio:
 
 ```bash
 cd frontend
@@ -77,16 +118,17 @@ Sirve `frontend/dist` con Nginx/Caddy. Configura proxy hacia:
 
 ## 7. HTTPS
 
-Usa Certbot, Caddy o el panel del proveedor para emitir SSL. En producción usa siempre HTTPS porque el sistema maneja sesiones, contactos y correos.
+Usa Certbot, Caddy o el panel del proveedor para emitir SSL. En produccion usa siempre HTTPS porque el sistema maneja sesiones, contactos y correos.
 
-## 8. Checklist de producción
+## 8. Checklist de produccion
 
-- Cambiar todas las contraseñas de ejemplo.
+- Cambiar todas las contrasenas de ejemplo.
 - Usar `JWT_SECRET` largo y aleatorio.
 - Activar SMTP real.
 - Configurar dominio en `FRONTEND_URL`.
-- Restringir MySQL al servidor, no exponerlo públicamente si no es necesario.
+- Configurar `VITE_API_URL` y `VITE_SOCKET_URL` en Vercel.
+- Restringir MySQL al servidor, no exponerlo publicamente si no es necesario.
 - Configurar backups de la base de datos.
 - Validar reportes PDF/XLSX.
-- Validar envío de alertas.
+- Validar envio de alertas.
 - Configurar monitoreo de logs.
