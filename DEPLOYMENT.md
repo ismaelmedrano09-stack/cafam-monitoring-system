@@ -41,6 +41,70 @@ FRONTEND_URL=https://tu-app.vercel.app
 
 Eso permite CORS y hace que los correos de confirmacion apunten al frontend publico.
 
+## Backend y MySQL en Railway
+
+Recomendacion para este proyecto: usa Railway para la API y la base de datos MySQL.
+
+Pasos:
+
+1. Entra a Railway y crea un proyecto nuevo.
+2. Agrega un servicio MySQL.
+3. Agrega otro servicio desde GitHub usando este repositorio.
+4. En el servicio de la API configura:
+
+```text
+Root Directory: backend
+Build Command: npm run build
+Start Command: npm start
+Healthcheck Path: /api/health
+```
+
+Railway MySQL inyecta variables como:
+
+```text
+MYSQLHOST
+MYSQLPORT
+MYSQLUSER
+MYSQLPASSWORD
+MYSQLDATABASE
+```
+
+El backend ya las reconoce automaticamente. No necesitas duplicarlas como `DB_HOST`, aunque tambien puede funcionar si las defines manualmente.
+
+Variables que debes agregar en el servicio backend de Railway:
+
+```text
+NODE_ENV=production
+JWT_SECRET=un_valor_largo_y_seguro
+JWT_EXPIRES_IN=8h
+FRONTEND_URL=https://cafam-monitoring-system.vercel.app
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu_correo@gmail.com
+SMTP_PASS=tu_app_password
+SMTP_FROM=tu_correo@gmail.com
+MQTT_URL=
+```
+
+Si todavia no tienes broker MQTT en la nube, deja `MQTT_URL` vacio para que la API no intente conectarse a `localhost`.
+
+### Inicializar la base de datos en Railway
+
+Despues de crear MySQL y desplegar el backend por primera vez, ejecuta una sola vez:
+
+```bash
+INIT_DATABASE_CONFIRM=RESET npm run db:init
+```
+
+Ese comando carga `database/schema.sql` y `database/seed.sql`. Usalo solo para la primera carga o cuando quieras reiniciar la base completa, porque borra y recrea tablas.
+
+Cuando Railway te entregue la URL publica de la API, actualiza Vercel:
+
+```text
+VITE_API_URL=https://tu-api.up.railway.app/api
+VITE_SOCKET_URL=https://tu-api.up.railway.app
+```
+
 ## 1. Preparar servidor para backend
 
 Instala:

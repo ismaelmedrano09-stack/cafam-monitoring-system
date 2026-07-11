@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "description": "Backend for Cafam telemetry monitoring system",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "db:init": "node scripts/initDatabase.js"
   },
   "dependencies": {
     "axios": "^1.7.9",
