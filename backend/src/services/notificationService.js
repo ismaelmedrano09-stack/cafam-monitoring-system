@@ -17,6 +17,9 @@ function createTransport() {
     host: SMTP_HOST,
     port: Number(SMTP_PORT || 587),
     secure: Number(SMTP_PORT) === 465,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: { user: SMTP_USER, pass: SMTP_PASS }
   });
 }
@@ -141,6 +144,43 @@ function confirmationEmailHtml(contact, siteName, token) {
     </div>`;
 }
 
+function userRegistrationEmailHtml(user, token) {
+  const appUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const confirmUrl = `${appUrl}/confirmar-registro?token=${token}`;
+  const roleLabel = {
+    regente_farmacia: 'Regente de farmacia',
+    auxiliar_farmacia: 'Auxiliar de farmacia',
+    calidad: 'Calidad',
+    mantenimiento_biomedico: 'Mantenimiento biomédico',
+    consulta_auditor: 'Consulta / auditor'
+  }[user.role] || user.role;
+
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto">
+      <div style="background:#0b4f8a;color:white;padding:18px 22px;border-radius:8px 8px 0 0">
+        <h2 style="margin:0">Cafam Monitoring — Confirmación de cuenta</h2>
+      </div>
+      <div style="border:1px solid #dce5ec;border-top:none;padding:22px;border-radius:0 0 8px 8px">
+        <p>Hola <strong>${escapeHtml(user.name)}</strong>,</p>
+        <p>Recibimos tu solicitud para crear una cuenta en el sistema de monitoreo clínico Cafam.</p>
+        <table style="width:100%;border-collapse:collapse;margin:14px 0">
+          <tr style="background:#f4f8fb"><td style="padding:8px;font-weight:bold;width:150px">Correo</td><td style="padding:8px">${escapeHtml(user.email)}</td></tr>
+          <tr><td style="padding:8px;font-weight:bold">Rol solicitado</td><td style="padding:8px">${escapeHtml(roleLabel)}</td></tr>
+          <tr style="background:#f4f8fb"><td style="padding:8px;font-weight:bold">Estado</td><td style="padding:8px">Pendiente de confirmación</td></tr>
+        </table>
+        <div style="text-align:center;margin:26px 0">
+          <a href="${confirmUrl}" style="background:#168a55;color:white;padding:13px 28px;border-radius:7px;text-decoration:none;font-weight:bold;display:inline-block">
+            Confirmar mi cuenta
+          </a>
+        </div>
+        <p style="color:#647382;font-size:12px;line-height:1.45">
+          Si no solicitaste esta cuenta, puedes ignorar este mensaje. El enlace solo se puede usar una vez.<br/>
+          Clínicas Cafam · Sistema de telemetría clínica
+        </p>
+      </div>
+    </div>`;
+}
+
 function simulatedAlertHtml(contact, sim) {
   const levelLabel = { critica: 'CRÍTICA', advertencia: 'ADVERTENCIA', informativa: 'INFORMATIVA' }[sim.level] || sim.level;
   const color = { critica: '#be2e35', advertencia: '#b98105', informativa: '#1268ad' }[sim.level] || '#1268ad';
@@ -180,6 +220,14 @@ async function sendConfirmationEmail(contact, siteName, token) {
   );
 }
 
+async function sendUserRegistrationEmail(user, token) {
+  return sendEmail(
+    user.email,
+    'Cafam Monitoring — Confirma tu cuenta',
+    userRegistrationEmailHtml(user, token)
+  );
+}
+
 async function sendSimulatedAlert(contact, sim) {
   return sendEmail(
     contact.email,
@@ -188,4 +236,4 @@ async function sendSimulatedAlert(contact, sim) {
   );
 }
 
-module.exports = { queueAlarmNotifications, sendConfirmationEmail, sendSimulatedAlert, sendEmail };
+module.exports = { queueAlarmNotifications, sendConfirmationEmail, sendUserRegistrationEmail, sendSimulatedAlert, sendEmail };

@@ -25,6 +25,8 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('administrador','regente_farmacia','auxiliar_farmacia','calidad','mantenimiento_biomedico','consulta_auditor') NOT NULL,
   status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  confirmed_at DATETIME NULL,
+  confirm_token VARCHAR(64) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

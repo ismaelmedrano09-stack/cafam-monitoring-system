@@ -109,6 +109,10 @@ button { border: 0; cursor: pointer; }
 .login-helper { margin: 0; padding: 10px 12px; border-radius: 7px; background: #eaf3fb; color: var(--blue); font-size: 13px; }
 .alert-register-link { margin: 0; text-align: center; color: var(--muted); font-size: 13px; }
 .alert-register-link a { color: var(--blue-2); font-weight: 800; }
+.centered-action { display: block; text-align: center; }
+.register-user-page { align-items: start; padding-top: 30px; }
+.register-user-shell { min-height: 620px; }
+.register-confirm-panel { margin-top: 40px; }
 .form-grid { display: grid; gap: 14px; }
 .field { display: grid; gap: 6px; }
 .field span { font-weight: 700; font-size: 14px; }

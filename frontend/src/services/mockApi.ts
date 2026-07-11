@@ -215,6 +215,20 @@ export function mockApi(config) {
     }
     return Promise.reject({ response: { status: 404, data: { message: 'El enlace de confirmación no es válido o ya fue usado.' } } });
   }
+  if (url === '/auth/public-register' && method === 'post') {
+    const token = `demo-user-${Date.now()}`;
+    localStorage.setItem('cafam_demo_user_confirmation', token);
+    return response({ id: Date.now(), email_sent: false, demo: true, confirmation_token: token }, 'Registro de usuario guardado en modo demo. Confirma la cuenta desde esta pantalla.');
+  }
+  if (url.startsWith('/auth/confirm-registration?token=') && method === 'get') {
+    const token = new URLSearchParams(url.split('?')[1]).get('token');
+    const expected = localStorage.getItem('cafam_demo_user_confirmation');
+    if (token && token === expected) {
+      localStorage.removeItem('cafam_demo_user_confirmation');
+      return response(null, 'Cuenta de demostración confirmada correctamente. Ya puedes iniciar sesión.');
+    }
+    return Promise.reject({ response: { status: 404, data: { message: 'El enlace de confirmación no es válido o ya fue usado.' } } });
+  }
   if (url === '/monitoring/simulate-alert' && method === 'post') {
     return response({ skipped: true }, 'Simulación registrada (modo demo). Configure SMTP para enviar correos reales.');
   }

@@ -85,6 +85,11 @@
         <p v-if="recoveryMessage" class="login-helper">{{ recoveryMessage }}</p>
 
         <p class="alert-register-link">
+          ¿No tienes cuenta?
+          <RouterLink to="/registro">Crear cuenta</RouterLink>
+        </p>
+
+        <p class="alert-register-link">
           ¿Quieres recibir alertas por correo?
           <RouterLink to="/registro-alerta">Registrarse aquí</RouterLink>
         </p>

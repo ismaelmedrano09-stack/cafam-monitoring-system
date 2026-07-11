@@ -8,6 +8,8 @@ import AreasView from '../views/AreasView.vue';
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView, meta: { public: true } },
+  { path: '/registro', component: () => import('../views/RegisterUserView.vue'), meta: { public: true } },
+  { path: '/confirmar-registro', component: () => import('../views/RegisterUserView.vue'), meta: { public: true } },
   { path: '/registro-alerta', component: () => import('../views/RegisterAlertView.vue'), meta: { public: true } },
   { path: '/confirmar-alerta', component: () => import('../views/RegisterAlertView.vue'), meta: { public: true } },
   { path: '/', component: DashboardView },
