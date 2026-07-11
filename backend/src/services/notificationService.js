@@ -1,5 +1,8 @@
 const pool = require('../config/db');
+const dns = require('dns');
 const nodemailer = require('nodemailer');
+
+dns.setDefaultResultOrder?.('ipv4first');
 
 function escapeHtml(value) {
   return String(value ?? '')
