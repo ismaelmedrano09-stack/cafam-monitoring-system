@@ -14,7 +14,7 @@ function escapeHtml(value) {
 }
 
 function createTransport() {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SERVERNAME } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
   return nodemailer.createTransport({
     host: SMTP_HOST,
@@ -24,6 +24,7 @@ function createTransport() {
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
+    tls: { servername: SMTP_SERVERNAME || SMTP_HOST },
     auth: { user: SMTP_USER, pass: SMTP_PASS }
   });
 }
