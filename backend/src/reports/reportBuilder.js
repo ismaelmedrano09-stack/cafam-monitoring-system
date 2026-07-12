@@ -1,6 +1,7 @@
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
 const pool = require('../config/db');
+const { analyzeSensor } = require('./reportAnalytics');
 
 const REPORTS = {
   daily: { label: 'Reporte diario', file: 'diario', rangeSql: 'CURDATE()', rangeText: 'Desde hoy a las 00:00' },
@@ -19,7 +20,10 @@ const COLORS = {
   gray: '#647382',
   line: '#dce5ec',
   soft: '#f4f8fb',
-  ink: '#1d2b36'
+  ink: '#1d2b36',
+  teal: '#2a9d9d',
+  tealSoft: '#d4ecec',
+  orange: '#e8873a'
 };
 
 const XLSX_COLORS = {
@@ -70,6 +74,122 @@ function titleCase(value) {
   return String(value || 'Sin dato')
     .replaceAll('_', ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function shortDateTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('es-CO', {
+    timeZone: 'America/Bogota', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+  });
+}
+
+function shortDate(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', month: 'short', day: '2-digit' });
+}
+
+function durationText(minutes) {
+  const m = Math.max(0, Math.round(Number(minutes) || 0));
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (h < 24) return rem ? `${h} h ${rem} min` : `${h} h`;
+  const d = Math.floor(h / 24);
+  const hr = h % 24;
+  return hr ? `${d} d ${hr} h` : `${d} d`;
+}
+
+// Dibuja una gráfica de líneas de una variable en el tiempo, con la banda de rango
+// permitido sombreada y el pico marcado. Inspirada y mejorada sobre el formato CENTEMP.
+function drawTimeSeriesChart(doc, opts) {
+  const { x, y, w, h, points, rangeMin, rangeMax, color, unit, title, peak } = opts;
+  const padL = 34;
+  const padR = 12;
+  const padT = 20;
+  const padB = 24;
+  const plotX = x + padL;
+  const plotY = y + padT;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+
+  // Marco y título
+  doc.roundedRect(x, y, w, h, 6).fillAndStroke('white', COLORS.line);
+  doc.fillColor(COLORS.ink).fontSize(10).font('Helvetica-Bold').text(title, x + 12, y + 6);
+
+  const vals = points.map((p) => p.v).filter((v) => Number.isFinite(v));
+  if (!vals.length) {
+    doc.fillColor(COLORS.gray).fontSize(9).font('Helvetica').text('Sin lecturas en el periodo.', plotX, plotY + plotH / 2 - 6);
+    return;
+  }
+
+  // Escala Y: incluye el rango permitido y un margen
+  let vMin = Math.min(...vals, rangeMin ?? Infinity);
+  let vMax = Math.max(...vals, rangeMax ?? -Infinity);
+  if (!Number.isFinite(vMin)) vMin = Math.min(...vals);
+  if (!Number.isFinite(vMax)) vMax = Math.max(...vals);
+  const pad = Math.max((vMax - vMin) * 0.12, 0.5);
+  vMin -= pad;
+  vMax += pad;
+  const vSpan = vMax - vMin || 1;
+
+  const times = points.map((p) => new Date(p.t).getTime());
+  const tMin = Math.min(...times);
+  const tMax = Math.max(...times);
+  const tSpan = tMax - tMin || 1;
+
+  const sx = (t) => plotX + ((new Date(t).getTime() - tMin) / tSpan) * plotW;
+  const sy = (v) => plotY + plotH - ((v - vMin) / vSpan) * plotH;
+
+  // Banda de rango permitido (verde translúcido)
+  if (rangeMin !== null && rangeMax !== null && rangeMin !== undefined && rangeMax !== undefined) {
+    const bandTop = sy(Math.min(rangeMax, vMax));
+    const bandBottom = sy(Math.max(rangeMin, vMin));
+    doc.save();
+    doc.rect(plotX, bandTop, plotW, bandBottom - bandTop).fillColor('#e7f4ec').fillOpacity(0.7).fill();
+    doc.restore();
+    // Líneas límite
+    [rangeMin, rangeMax].forEach((limit) => {
+      const ly = sy(limit);
+      doc.save().lineWidth(0.7).dash(3, { space: 2 }).strokeColor(COLORS.green)
+        .moveTo(plotX, ly).lineTo(plotX + plotW, ly).stroke().undash().restore();
+    });
+  }
+
+  // Cuadrícula + etiquetas Y (4 líneas)
+  doc.fontSize(6.5).font('Helvetica').fillColor(COLORS.gray);
+  for (let i = 0; i <= 4; i += 1) {
+    const v = vMin + (vSpan * i) / 4;
+    const gy = sy(v);
+    doc.save().lineWidth(0.4).strokeColor(COLORS.line).moveTo(plotX, gy).lineTo(plotX + plotW, gy).stroke().restore();
+    doc.fillColor(COLORS.gray).text(v.toFixed(1), x + 2, gy - 4, { width: padL - 6, align: 'right' });
+  }
+
+  // Etiquetas X (inicio, medio, fin)
+  [0, 0.5, 1].forEach((frac) => {
+    const t = tMin + tSpan * frac;
+    const lx = plotX + plotW * frac;
+    doc.fillColor(COLORS.gray).fontSize(6.5).text(shortDate(new Date(t)), lx - 18, plotY + plotH + 6, { width: 36, align: 'center' });
+  });
+
+  // Línea de datos
+  doc.save().lineWidth(0.8).strokeColor(color);
+  points.forEach((p, i) => {
+    if (!Number.isFinite(p.v)) return;
+    const px = sx(p.t);
+    const py = sy(p.v);
+    if (i === 0) doc.moveTo(px, py); else doc.lineTo(px, py);
+  });
+  doc.stroke().restore();
+
+  // Marcador del pico
+  if (peak && Number.isFinite(peak.value)) {
+    const px = sx(peak.at);
+    const py = sy(peak.value);
+    doc.save().circle(px, py, 2.6).fillColor(COLORS.red).fill().restore();
+    const labelX = Math.min(px + 4, plotX + plotW - 90);
+    doc.fillColor(COLORS.red).fontSize(6.8).font('Helvetica-Bold')
+      .text(`pico ${peak.value.toFixed(1)}${unit} · ${shortDateTime(peak.at)}`, labelX, Math.max(py - 12, plotY), { width: 110 });
+  }
 }
 
 async function getReportData(type = 'daily') {
@@ -169,6 +289,40 @@ async function getReportData(type = 'daily') {
 
   const primarySensor = bySensor.find((sensor) => Number(sensor.total_readings) > 0) || bySensor[0] || null;
 
+  // Series cronológicas ascendentes por sensor para las gráficas y el análisis de excursiones.
+  const [seriesRows] = await pool.query(`
+    SELECT r.sensor_id, r.temperature, r.humidity, r.calculated_status, r.created_at
+    FROM readings r
+    WHERE r.created_at >= ${range}
+    ORDER BY r.created_at ASC
+    LIMIT 8000
+  `);
+
+  const seriesBySensor = new Map();
+  for (const row of seriesRows) {
+    if (!seriesBySensor.has(row.sensor_id)) seriesBySensor.set(row.sensor_id, []);
+    seriesBySensor.get(row.sensor_id).push(row);
+  }
+
+  // Umbrales reales del sensor (la consulta bySensor sobrescribe temp_min/max con extremos de lecturas).
+  const [thresholds] = await pool.query('SELECT id, temp_min, temp_max, humidity_min, humidity_max FROM sensors');
+  const thresholdMap = new Map(thresholds.map((row) => [row.id, row]));
+
+  // Análisis por equipo (temperatura, humedad, picos, MKT, excursiones) para los que tienen datos.
+  const analyses = bySensor
+    .filter((sensor) => seriesBySensor.has(sensor.id))
+    .map((sensor) => {
+      const th = thresholdMap.get(sensor.id) || {};
+      const withThresholds = {
+        ...sensor,
+        temp_min: th.temp_min,
+        temp_max: th.temp_max,
+        humidity_min: th.humidity_min,
+        humidity_max: th.humidity_max
+      };
+      return analyzeSensor(withThresholds, seriesBySensor.get(sensor.id));
+    });
+
   return {
     type,
     config,
@@ -178,6 +332,7 @@ async function getReportData(type = 'daily') {
     byArea,
     bySensor,
     primarySensor,
+    analyses,
     stats: stats || {},
     alarmStats: alarmStats || {}
   };
@@ -267,6 +422,155 @@ function drawUnitDataSummary(doc, data, y) {
   });
 
   return y + 228;
+}
+
+function miniCard(doc, x, y, w, label, value, sub, color = COLORS.blue) {
+  doc.roundedRect(x, y, w, 58, 5).fillAndStroke('white', COLORS.line);
+  doc.rect(x, y, w, 3).fill(color);
+  doc.fillColor(COLORS.gray).fontSize(7).font('Helvetica-Bold').text(label.toUpperCase(), x + 8, y + 9, { width: w - 14 });
+  doc.fillColor(COLORS.ink).fontSize(13).font('Helvetica-Bold').text(String(value), x + 8, y + 22, { width: w - 14 });
+  if (sub) doc.fillColor(COLORS.gray).fontSize(6.5).font('Helvetica').text(sub, x + 8, y + 42, { width: w - 14 });
+}
+
+// Encabezado de sección estilo INVIMA (título con subrayado naranja).
+function sectionHeader(doc, y, text) {
+  doc.fillColor(COLORS.ink).fontSize(11).font('Helvetica-Bold').text(text.toUpperCase(), 40, y);
+  doc.rect(40, y + 15, 515, 1.5).fill(COLORS.orange);
+  return y + 24;
+}
+
+// Tabla compacta estilo normativa (encabezado teal), usada dentro de la página de equipo.
+function invimaTable(doc, y, columns, rows, emptyText) {
+  const x = 40;
+  const width = 515;
+  doc.rect(x, y, width, 20).fill(COLORS.teal);
+  let cursor = x;
+  columns.forEach((col) => {
+    doc.fillColor('white').fontSize(7.5).font('Helvetica-Bold').text(col.label.toUpperCase(), cursor + 5, y + 6, { width: col.width - 8 });
+    cursor += col.width;
+  });
+  y += 20;
+  const list = rows.length ? rows : [null];
+  list.forEach((row, index) => {
+    if (y > 770) { doc.addPage(); y = 40; }
+    const rowH = 20;
+    if (index % 2 === 1) doc.rect(x, y, width, rowH).fill('#f5fafa');
+    doc.rect(x, y, width, rowH).stroke(COLORS.line);
+    cursor = x;
+    columns.forEach((col) => {
+      const raw = row ? (typeof col.value === 'function' ? col.value(row) : row[col.key]) : (col === columns[0] ? (emptyText || 'Sin registros') : '');
+      doc.fillColor(COLORS.ink).fontSize(7.5).font('Helvetica').text(String(raw ?? '—'), cursor + 5, y + 6, { width: col.width - 8, ellipsis: true });
+      cursor += col.width;
+    });
+    y += rowH;
+  });
+  return y + 14;
+}
+
+// Página de informe por nevera siguiendo la estructura normativa INVIMA/Cafam,
+// con diseño mejorado, gráficas de temperatura y humedad y análisis de excursiones.
+function drawEquipmentDetail(doc, analysis, data, user) {
+  const s = analysis.sensor;
+  const t = analysis.temperature;
+  const hum = analysis.humidity;
+  const critical = (t?.excursions.length || 0) > 0;
+  const periodMin = analysis.first && analysis.last
+    ? Math.max(1, (new Date(analysis.last.created_at) - new Date(analysis.first.created_at)) / 60000) : 1;
+  doc.addPage();
+
+  // Encabezado institucional (INVIMA — Cafam)
+  doc.rect(0, 0, doc.page.width, 70).fill(COLORS.blue);
+  doc.roundedRect(40, 18, 74, 34, 4).fill('white');
+  doc.fillColor(COLORS.blue).fontSize(13).font('Helvetica-Bold').text('INVIMA', 48, 30);
+  doc.roundedRect(481, 18, 74, 34, 4).fill('white');
+  doc.fillColor(COLORS.blue).fontSize(13).font('Helvetica-Bold').text('CAFAM', 490, 30);
+  doc.fillColor('white').fontSize(13).font('Helvetica-Bold').text('CONTROL DE TEMPERATURA Y HUMEDAD', 0, 24, { width: doc.page.width, align: 'center' });
+  doc.fontSize(8).font('Helvetica').text('Cadena de frío · Refrigeración de medicamentos y biológicos', 0, 44, { width: doc.page.width, align: 'center' });
+
+  // ESTADO DE LA NEVERA
+  let y = sectionHeader(doc, 86, 'Estado de la nevera');
+  y = invimaTable(doc, y, [
+    { label: 'Fecha del reporte', value: () => shortDateTime(new Date()), width: 130 },
+    { label: 'Nombre de la clínica', value: () => s.site_name || 'Cafam', width: 200 },
+    { label: 'Responsable', value: () => s.responsible || user.name, width: 185 }
+  ], [s], null);
+
+  // RESUMEN DEL ESTADO
+  y = sectionHeader(doc, y, 'Resumen del estado');
+  const estadoTexto = critical
+    ? `La nevera ${s.code} presentó ${t.excursions.length} desviación(es) de temperatura fuera del rango permitido (${number(s.temp_min)}–${number(s.temp_max)} °C). Tiempo total fuera de rango: ${durationText(t.time.outMinutes)}. Requiere revisión y acción correctiva.`
+    : `La nevera ${s.code} se mantuvo dentro del rango permitido (${number(s.temp_min)}–${number(s.temp_max)} °C) durante el periodo evaluado, con ${percent(t?.time.inPercent)} del tiempo en cumplimiento. Estado conforme.`;
+  doc.fillColor(critical ? COLORS.red : COLORS.green).fontSize(9).font('Helvetica-Bold')
+    .text(critical ? 'ESTADO: CRÍTICO' : 'ESTADO: CONFORME', 40, y);
+  doc.fillColor(COLORS.ink).fontSize(8.5).font('Helvetica').text(estadoTexto, 40, y + 14, { width: 515 });
+  y += 48;
+
+  // INFORMACIÓN GENERAL
+  y = sectionHeader(doc, y, 'Información general');
+  y = invimaTable(doc, y, [
+    { label: 'Nevera código', value: () => s.code, width: 90 },
+    { label: '% Humedad', value: () => `${number(hum?.avg)} % (${number(hum?.min?.value)}–${number(hum?.max?.value)})`, width: 130 },
+    { label: 'Temperatura', value: () => `${number(t?.avg)} °C (${number(t?.min?.value)}–${number(t?.max?.value)})`, width: 130 },
+    { label: 'Estado crítico', value: () => critical ? 'SÍ' : 'NO', width: 70 },
+    { label: 'Indicaciones', value: () => critical ? 'Verificar y corregir' : 'Sin novedad', width: 95 }
+  ], [s], null);
+
+  // Gráficas
+  drawTimeSeriesChart(doc, {
+    x: 40, y, w: 515, h: 138,
+    points: analysis.readings.map((r) => ({ t: r.created_at, v: Number(r.temperature) })),
+    rangeMin: t?.range.min ?? null, rangeMax: t?.range.max ?? null,
+    color: COLORS.red, unit: '°C', title: 'Temperatura (°C) en el tiempo', peak: t?.max || null
+  });
+  y += 148;
+  drawTimeSeriesChart(doc, {
+    x: 40, y, w: 515, h: 138,
+    points: analysis.readings.map((r) => ({ t: r.created_at, v: Number(r.humidity) })),
+    rangeMin: hum?.range.min ?? null, rangeMax: hum?.range.max ?? null,
+    color: COLORS.blue2, unit: '%', title: 'Humedad relativa (%) en el tiempo', peak: hum?.max || null
+  });
+  y += 148;
+
+  // Tarjetas de métricas
+  const cardW = (515 - 5 * 8) / 6;
+  [
+    ['Promedio', `${number(t?.avg)} °C`, `Desv. ${number(t?.stdDev)}`, COLORS.blue],
+    ['Máximo', `${number(t?.max?.value)} °C`, t?.max ? shortDateTime(t.max.at) : '—', COLORS.red],
+    ['Mínimo', `${number(t?.min?.value)} °C`, t?.min ? shortDateTime(t.min.at) : '—', COLORS.blue2],
+    ['MKT', `${number(analysis.mkt)} °C`, 'Temp. cinetica media', COLORS.green],
+    ['Tiempo en rango', percent(t?.time.inPercent), durationText(t?.time.inMinutes), Number(t?.time.inPercent || 0) >= 90 ? COLORS.green : COLORS.yellow],
+    ['Fuera de rango', durationText(t?.time.outMinutes), `${t?.excursions.length || 0} excursiones`, (t?.excursions.length || 0) ? COLORS.red : COLORS.green]
+  ].forEach(([label, value, sub, color], i) => miniCard(doc, 40 + i * (cardW + 8), y, cardW, label, value, sub, color));
+  y += 70;
+
+  // INDICACIONES PARA SEGUIR (desviaciones / excursiones)
+  const excursions = [
+    ...(t?.excursions || []).map((e) => ({ ...e, variable: 'Temperatura' })),
+    ...(hum?.excursions || []).map((e) => ({ ...e, variable: 'Humedad' }))
+  ].sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+  if (y > 640) { doc.addPage(); y = 40; }
+  y = sectionHeader(doc, y, 'Indicaciones para seguir');
+  y = invimaTable(doc, y, [
+    { label: 'Tipo de desviación', value: (e) => `${e.variable} ${e.type === 'alta' ? 'sobre rango' : 'bajo rango'}`, width: 130 },
+    { label: 'Tipo de reporte', value: (e) => e.type === 'alta' ? 'Crítico' : 'Advertencia', width: 90 },
+    { label: '% del periodo', value: (e) => `${number((e.durationMin / periodMin) * 100)} %`, width: 85 },
+    { label: 'Duración', value: (e) => durationText(e.durationMin), width: 90 },
+    { label: 'Pico', value: (e) => `${number(e.peak)} ${e.variable === 'Temperatura' ? '°C' : '%'}`, width: 120 }
+  ], excursions.slice(0, 12), 'Sin desviaciones en el periodo');
+
+  // RIESGO E HISTORIAL DE PROBLEMAS (alarmas del equipo)
+  const sensorAlarms = (data.alarms || []).filter((a) => a.sensor_code === s.code || a.sensor_id === s.id);
+  if (y > 680) { doc.addPage(); y = 40; }
+  y = sectionHeader(doc, y, 'Riesgo e historial de problemas');
+  invimaTable(doc, y, [
+    { label: 'Problema', value: (a) => a.description || titleCase(a.level), width: 260 },
+    { label: 'Asignado a', value: (a) => a.assigned_to || s.responsible || 'Sin asignar', width: 130 },
+    { label: 'Fecha', value: (a) => shortDateTime(a.started_at), width: 125 }
+  ], sensorAlarms.slice(0, 10), 'Sin problemas registrados');
+
+  // Pie institucional
+  doc.fillColor(COLORS.gray).fontSize(7).font('Helvetica')
+    .text('Avenida Carrera 68 90 88, Barrio Floresta, Bogotá D.C., Colombia · NIT: 860013570', 40, 812, { width: 515, align: 'center', lineBreak: false });
 }
 
 function table(doc, title, columns, rows, startY, options = {}) {
@@ -366,11 +670,14 @@ async function buildPdf({ type, user }) {
     { label: 'Estado', value: (row) => titleCase(row.calculated_status), width: 90 }
   ], data.readings, 40, { limit: 28 });
 
+  // Páginas de análisis detallado por equipo (gráficas + excursiones).
+  (data.analyses || []).slice(0, 6).forEach((analysis) => drawEquipmentDetail(doc, analysis, data, user));
+
   const pages = doc.bufferedPageRange();
   for (let i = 0; i < pages.count; i += 1) {
     doc.switchToPage(i);
-    doc.fillColor(COLORS.gray).fontSize(8).text(`Página ${i + 1} de ${pages.count}`, 480, 812);
-    doc.text('Documento generado automáticamente por Cafam Monitoring', 40, 812);
+    doc.fillColor(COLORS.gray).fontSize(8).text(`Página ${i + 1} de ${pages.count}`, 480, 812, { lineBreak: false });
+    doc.text('Documento generado automáticamente por Cafam Monitoring', 40, 812, { lineBreak: false });
   }
 
   doc.end();
@@ -656,6 +963,66 @@ async function buildExcel({ type, user }) {
   ];
   actions.addRows(data.actions.map((action) => ({ ...action, created_at: dateTime(action.created_at) })));
   styleSheet(actions, { tabColor: XLSX_COLORS.yellow, headerColor: XLSX_COLORS.yellow });
+
+  // Hoja de análisis por equipo: picos con marca de tiempo, MKT y tiempo fuera de rango.
+  const analysisSheet = workbook.addWorksheet('Análisis por equipo');
+  analysisSheet.columns = [
+    { header: 'Equipo', key: 'equipo', width: 30 },
+    { header: 'Temp. prom.', key: 'tavg', width: 12 },
+    { header: 'Temp. máx.', key: 'tmax', width: 12 },
+    { header: 'Máx. en', key: 'tmaxat', width: 20 },
+    { header: 'Temp. mín.', key: 'tmin', width: 12 },
+    { header: 'Mín. en', key: 'tminat', width: 20 },
+    { header: 'MKT', key: 'mkt', width: 10 },
+    { header: '% tiempo en rango', key: 'inrange', width: 16 },
+    { header: 'Tiempo fuera', key: 'outtime', width: 16 },
+    { header: 'Excursiones', key: 'exc', width: 12 }
+  ];
+  (data.analyses || []).forEach((a) => {
+    analysisSheet.addRow({
+      equipo: `${a.sensor.code} - ${a.sensor.name}`,
+      tavg: a.temperature?.avg ?? null,
+      tmax: a.temperature?.max?.value ?? null,
+      tmaxat: a.temperature?.max ? dateTime(a.temperature.max.at) : '—',
+      tmin: a.temperature?.min?.value ?? null,
+      tminat: a.temperature?.min ? dateTime(a.temperature.min.at) : '—',
+      mkt: a.mkt,
+      inrange: a.temperature?.time.inPercent ?? null,
+      outtime: durationText(a.temperature?.time.outMinutes || 0),
+      exc: (a.temperature?.excursions.length || 0) + (a.humidity?.excursions.length || 0)
+    });
+  });
+  styleSheet(analysisSheet, { tabColor: XLSX_COLORS.blue, headerColor: XLSX_COLORS.blue });
+
+  // Hoja de excursiones detalladas (desviaciones fuera de rango).
+  const excSheet = workbook.addWorksheet('Excursiones');
+  excSheet.columns = [
+    { header: 'Equipo', key: 'equipo', width: 30 },
+    { header: 'Variable', key: 'variable', width: 14 },
+    { header: 'Tipo', key: 'tipo', width: 14 },
+    { header: 'Inicio', key: 'inicio', width: 22 },
+    { header: 'Fin', key: 'fin', width: 22 },
+    { header: 'Duración', key: 'duracion', width: 16 },
+    { header: 'Valor pico', key: 'pico', width: 12 },
+    { header: 'Pico en', key: 'picoat', width: 22 }
+  ];
+  (data.analyses || []).forEach((a) => {
+    const rows = [
+      ...(a.temperature?.excursions || []).map((e) => ({ ...e, variable: 'Temperatura', unit: '°C' })),
+      ...(a.humidity?.excursions || []).map((e) => ({ ...e, variable: 'Humedad', unit: '%' }))
+    ];
+    rows.forEach((e) => excSheet.addRow({
+      equipo: `${a.sensor.code} - ${a.sensor.name}`,
+      variable: e.variable,
+      tipo: e.type === 'alta' ? 'Sobre rango' : 'Bajo rango',
+      inicio: dateTime(e.startAt),
+      fin: dateTime(e.endAt),
+      duracion: durationText(e.durationMin),
+      pico: e.peak,
+      picoat: dateTime(e.peakAt)
+    }));
+  });
+  styleSheet(excSheet, { tabColor: XLSX_COLORS.red, headerColor: XLSX_COLORS.red });
 
   data.bySensor
     .filter((sensor) => Number(sensor.total_readings) > 0)
