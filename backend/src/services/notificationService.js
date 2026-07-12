@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const dns = require('dns');
+const axios = require('axios');
 const nodemailer = require('nodemailer');
 
 dns.setDefaultResultOrder?.('ipv4first');
@@ -29,10 +30,39 @@ function createTransport() {
   });
 }
 
+// Envío por API HTTPS de Brevo (puerto 443, no bloqueado en Railway)
+async function sendViaBrevo(to, subject, fullHtml) {
+  const fromEmail = process.env.BREVO_FROM || process.env.SMTP_FROM || process.env.SMTP_USER;
+  await axios.post(
+    'https://api.brevo.com/v3/smtp/email',
+    {
+      sender: { email: fromEmail, name: process.env.BREVO_FROM_NAME || 'Cafam Telemetría' },
+      to: [{ email: to }],
+      subject,
+      htmlContent: fullHtml
+    },
+    {
+      headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json' },
+      timeout: 15000
+    }
+  );
+  return { sent: true, provider: 'brevo' };
+}
+
 async function sendEmail(to, subject, html) {
+  const fullHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body>${html}</body></html>`;
+
+  if (process.env.BREVO_API_KEY) {
+    try {
+      return await sendViaBrevo(to, subject, fullHtml);
+    } catch (err) {
+      const detail = err.response?.data?.message || err.message;
+      console.error(`[email] Brevo falló (${detail}), intentando SMTP...`);
+    }
+  }
+
   const transporter = createTransport();
   if (!transporter) return { skipped: true, reason: 'SMTP no configurado' };
-  const fullHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body>${html}</body></html>`;
   await transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
@@ -40,7 +70,7 @@ async function sendEmail(to, subject, html) {
     html: fullHtml,
     encoding: 'utf-8'
   });
-  return { sent: true };
+  return { sent: true, provider: 'smtp' };
 }
 
 function alarmEmailHtml(alarm, sensor, contact) {
@@ -107,7 +137,7 @@ async function queueAlarmNotifications(alarmId, sensorId, level) {
             alarmEmailHtml(alarm, sensor, contact)
           );
           status = result.skipped ? 'queued' : 'sent';
-          providerMessage = result.skipped ? result.reason : 'Enviado via SMTP';
+          providerMessage = result.skipped ? result.reason : `Enviado via ${result.provider || 'SMTP'}`;
         } catch (err) {
           status = 'failed';
           providerMessage = err.message;
