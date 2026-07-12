@@ -4,7 +4,7 @@ import { isJwtExpired, notifySessionExpired } from './session';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
-  timeout: 10000
+  timeout: Number(import.meta.env.VITE_API_TIMEOUT_MS || 60000)
 });
 
 api.interceptors.request.use((config) => {
