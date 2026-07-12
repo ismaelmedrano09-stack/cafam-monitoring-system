@@ -41,3 +41,5 @@ tmp-*.pdf
 tmp-*.xlsx
 tmp-*.csv
 tmp-*.html
+
+.claude/
