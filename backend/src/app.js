@@ -10,11 +10,15 @@ app.set('trust proxy', 1);
 app.use(cors({
   origin(origin, callback) {
     if (!origin) return callback(null, true);
+    let host = '';
+    try { host = new URL(origin).hostname; } catch { host = ''; }
     if (
       origin.startsWith('http://localhost') ||
       origin.startsWith('http://127.0.0.1') ||
       origin.startsWith('http://192.168.') ||
       origin.startsWith('http://10.') ||
+      host.endsWith('.vercel.app') ||
+      host.endsWith('.onrender.com') ||
       origin === env.frontendUrl
     ) return callback(null, true);
     return callback(new Error(`Origin no permitido por CORS: ${origin}`));
