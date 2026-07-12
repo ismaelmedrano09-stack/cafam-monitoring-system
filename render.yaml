@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: cafam-monitoring-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      # Los siguientes se configuran en el dashboard de Render (Environment):
+      #   JWT_SECRET, FRONTEND_URL
+      #   DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+      #   BREVO_API_KEY, BREVO_FROM
+      #   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
