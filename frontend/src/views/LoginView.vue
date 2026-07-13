@@ -88,11 +88,6 @@
           ¿No tienes cuenta?
           <RouterLink to="/registro">Crear cuenta</RouterLink>
         </p>
-
-        <p class="alert-register-link">
-          ¿Quieres recibir alertas por correo?
-          <RouterLink to="/registro-alerta">Registrarse aquí</RouterLink>
-        </p>
       </form>
     </div>
   </section>

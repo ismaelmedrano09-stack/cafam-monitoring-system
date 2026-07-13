@@ -266,19 +266,22 @@ async function areas(req, res) {
 }
 
 async function registerContact(req, res) {
-  const { site_id = null, name, cargo = null, email, phone = null, channels = [], levels = [] } = req.body;
+  const { site_id = null, name, cargo = null, email, phone = null, channels = [], levels = [], whatsapp_apikey = null } = req.body;
   if (!name || !email) return fail(res, 'Nombre y correo son obligatorios', null, 400);
 
   const normalizedEmail = String(email).trim().toLowerCase();
   const allowedLevels = ['critica', 'advertencia', 'informativa'];
-  const allowedChannels = ['email', 'sms', 'call'];
+  const allowedChannels = ['email', 'sms', 'call', 'whatsapp'];
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return fail(res, 'Ingresa un correo electrónico válido', null, 400);
   if (!levels.length) return fail(res, 'Selecciona al menos un nivel de alarma', null, 400);
   if (!channels.length) return fail(res, 'Selecciona al menos un canal de notificación', null, 400);
   if (levels.some((level) => !allowedLevels.includes(level))) return fail(res, 'Uno de los niveles de alarma no es válido', null, 400);
   if (channels.some((channel) => !allowedChannels.includes(channel))) return fail(res, 'Uno de los canales de notificación no es válido', null, 400);
-  if (channels.some((channel) => channel === 'sms' || channel === 'call') && !phone) {
-    return fail(res, 'El teléfono es obligatorio para recibir SMS o llamadas', null, 400);
+  if (channels.some((channel) => channel === 'sms' || channel === 'call' || channel === 'whatsapp') && !phone) {
+    return fail(res, 'El teléfono es obligatorio para recibir SMS, llamadas o WhatsApp', null, 400);
+  }
+  if (channels.includes('whatsapp') && !whatsapp_apikey) {
+    return fail(res, 'Para WhatsApp necesitas tu API key de CallMeBot (sigue las instrucciones del formulario)', null, 400);
   }
 
   if (site_id) {
@@ -295,15 +298,15 @@ async function registerContact(req, res) {
     contactId = existing[0].id;
     await pool.query(
       `UPDATE notification_contacts
-       SET site_id = ?, name = ?, cargo = ?, phone = ?, channels = ?, levels = ?, status = 'inactive', confirm_token = ?, confirmed_at = NULL
+       SET site_id = ?, name = ?, cargo = ?, phone = ?, whatsapp_apikey = ?, channels = ?, levels = ?, status = 'inactive', confirm_token = ?, confirmed_at = NULL
        WHERE id = ?`,
-      [site_id, name, cargo, phone, JSON.stringify(channels), JSON.stringify(levels), token, contactId]
+      [site_id, name, cargo, phone, whatsapp_apikey, JSON.stringify(channels), JSON.stringify(levels), token, contactId]
     );
   } else {
     const [result] = await pool.query(
-      `INSERT INTO notification_contacts (site_id, name, cargo, email, phone, channels, levels, status, confirm_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'inactive', ?)`,
-      [site_id, name, cargo, normalizedEmail, phone, JSON.stringify(channels), JSON.stringify(levels), token]
+      `INSERT INTO notification_contacts (site_id, name, cargo, email, phone, whatsapp_apikey, channels, levels, status, confirm_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'inactive', ?)`,
+      [site_id, name, cargo, normalizedEmail, phone, whatsapp_apikey, JSON.stringify(channels), JSON.stringify(levels), token]
     );
     contactId = result.insertId;
   }

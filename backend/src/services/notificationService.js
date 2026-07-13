@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const dns = require('dns');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
+const { sendWhatsApp, alarmWhatsAppText, simulatedWhatsAppText } = require('./whatsappService');
 
 dns.setDefaultResultOrder?.('ipv4first');
 
@@ -144,6 +145,17 @@ async function queueAlarmNotifications(alarmId, sensorId, level) {
         }
       }
 
+      if (channel === 'whatsapp' && alarm && sensor) {
+        try {
+          const result = await sendWhatsApp(contact.phone, contact.whatsapp_apikey, alarmWhatsAppText(alarm, sensor));
+          status = result.skipped ? 'queued' : 'sent';
+          providerMessage = result.skipped ? result.reason : 'Enviado via CallMeBot (WhatsApp)';
+        } catch (err) {
+          status = 'failed';
+          providerMessage = err.message;
+        }
+      }
+
       await pool.query(
         `INSERT INTO notification_logs (alarm_id, contact_id, channel, destination, status, provider_message)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -264,11 +276,26 @@ async function sendUserRegistrationEmail(user, token) {
 }
 
 async function sendSimulatedAlert(contact, sim) {
-  return sendEmail(
-    contact.email,
-    `[SIMULACIÓN] Alerta ${sim.level}: ${sim.sensor_code} — ${sim.site_name}`,
-    simulatedAlertHtml(contact, sim)
-  );
+  const results = {};
+  const channels = typeof contact.channels === 'string' ? JSON.parse(contact.channels) : (contact.channels || ['email']);
+
+  if (!channels.length || channels.includes('email')) {
+    results.email = await sendEmail(
+      contact.email,
+      `[SIMULACIÓN] Alerta ${sim.level}: ${sim.sensor_code} — ${sim.site_name}`,
+      simulatedAlertHtml(contact, sim)
+    );
+  }
+
+  if (channels.includes('whatsapp')) {
+    try {
+      results.whatsapp = await sendWhatsApp(contact.phone, contact.whatsapp_apikey, simulatedWhatsAppText(sim));
+    } catch (err) {
+      results.whatsapp = { failed: true, reason: err.message };
+    }
+  }
+
+  return results.email || results.whatsapp || { skipped: true, reason: 'Sin canales configurados' };
 }
 
 module.exports = { queueAlarmNotifications, sendConfirmationEmail, sendUserRegistrationEmail, sendSimulatedAlert, sendEmail };

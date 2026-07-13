@@ -105,6 +105,13 @@
               </span>
             </label>
             <label class="check-item">
+              <input v-model="form.channels" type="checkbox" value="whatsapp" />
+              <span>
+                <strong>💬 WhatsApp</strong>
+                <small>Mensaje de WhatsApp al celular registrado. Requiere una activación única y gratuita.</small>
+              </span>
+            </label>
+            <label class="check-item">
               <input v-model="form.channels" type="checkbox" value="sms" />
               <span>
                 <strong>📱 SMS</strong>
@@ -120,6 +127,22 @@
             </label>
           </div>
           <p v-if="channelError" class="error">Selecciona al menos un canal de notificación.</p>
+
+          <div v-if="form.channels.includes('whatsapp')" class="register-success" style="margin-top:12px">
+            <strong>💬 Activa WhatsApp (una sola vez, gratis)</strong>
+            <p style="margin:8px 0 4px">
+              1. Guarda en tus contactos el número <strong>+34 644 71 81 99</strong> (bot CallMeBot).<br />
+              2. Envíale por WhatsApp el mensaje: <em>I allow callmebot to send me messages</em><br />
+              3. El bot te responderá con tu <strong>API key</strong>. Escríbela aquí:
+            </p>
+            <label class="field">
+              <span>API key de CallMeBot <span class="required">*</span></span>
+              <input v-model.trim="form.whatsapp_apikey" placeholder="Ej. 123456" />
+            </label>
+            <p style="font-size:12px;color:var(--muted);margin-top:4px">
+              Usa tu número con código de país en el campo Teléfono (Ej. +573001234567 o +5215512345678).
+            </p>
+          </div>
         </fieldset>
 
         <p v-if="error" class="error">{{ error }}</p>
@@ -160,6 +183,7 @@ const form = ref({
   cargo: '',
   email: '',
   phone: '',
+  whatsapp_apikey: '',
   site_id: null as number | null,
   levels: [] as string[],
   channels: ['email'] as string[]
