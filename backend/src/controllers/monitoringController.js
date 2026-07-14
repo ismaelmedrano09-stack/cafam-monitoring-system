@@ -280,9 +280,6 @@ async function registerContact(req, res) {
   if (channels.some((channel) => channel === 'sms' || channel === 'call' || channel === 'whatsapp') && !phone) {
     return fail(res, 'El teléfono es obligatorio para recibir SMS, llamadas o WhatsApp', null, 400);
   }
-  if (channels.includes('whatsapp') && !whatsapp_apikey) {
-    return fail(res, 'Para WhatsApp necesitas tu API key de CallMeBot (sigue las instrucciones del formulario)', null, 400);
-  }
 
   if (site_id) {
     const [[siteExists]] = await pool.query('SELECT id FROM sites WHERE id = ? AND status = ?', [site_id, 'active']);

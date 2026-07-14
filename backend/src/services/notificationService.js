@@ -3,6 +3,19 @@ const dns = require('dns');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const { sendWhatsApp, alarmWhatsAppText, simulatedWhatsAppText } = require('./whatsappService');
+const bot = require('./whatsappBot');
+
+// Envía WhatsApp por el bot propio si está vinculado; si no, usa CallMeBot como respaldo.
+async function sendWhatsAppSmart(phone, apikey, text) {
+  if (bot.isConnected()) {
+    try {
+      return await bot.sendBotMessage(phone, text);
+    } catch (err) {
+      console.error('[wa-bot] fallo al enviar, probando CallMeBot:', err.message);
+    }
+  }
+  return sendWhatsApp(phone, apikey, text);
+}
 
 dns.setDefaultResultOrder?.('ipv4first');
 
@@ -147,9 +160,9 @@ async function queueAlarmNotifications(alarmId, sensorId, level) {
 
       if (channel === 'whatsapp' && alarm && sensor) {
         try {
-          const result = await sendWhatsApp(contact.phone, contact.whatsapp_apikey, alarmWhatsAppText(alarm, sensor));
+          const result = await sendWhatsAppSmart(contact.phone, contact.whatsapp_apikey, alarmWhatsAppText(alarm, sensor));
           status = result.skipped ? 'queued' : 'sent';
-          providerMessage = result.skipped ? result.reason : 'Enviado via CallMeBot (WhatsApp)';
+          providerMessage = result.skipped ? result.reason : `Enviado via WhatsApp (${result.provider || 'callmebot'})`;
         } catch (err) {
           status = 'failed';
           providerMessage = err.message;
@@ -289,7 +302,7 @@ async function sendSimulatedAlert(contact, sim) {
 
   if (channels.includes('whatsapp')) {
     try {
-      results.whatsapp = await sendWhatsApp(contact.phone, contact.whatsapp_apikey, simulatedWhatsAppText(sim));
+      results.whatsapp = await sendWhatsAppSmart(contact.phone, contact.whatsapp_apikey, simulatedWhatsAppText(sim));
     } catch (err) {
       results.whatsapp = { failed: true, reason: err.message };
     }

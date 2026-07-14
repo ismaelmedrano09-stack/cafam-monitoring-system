@@ -129,19 +129,16 @@
           <p v-if="channelError" class="error">Selecciona al menos un canal de notificación.</p>
 
           <div v-if="form.channels.includes('whatsapp')" class="register-success" style="margin-top:12px">
-            <strong>💬 Activa WhatsApp (una sola vez, gratis)</strong>
+            <strong>💬 Recibir alertas por WhatsApp</strong>
             <p style="margin:8px 0 4px">
-              1. Guarda en tus contactos el número <strong>+34 644 71 81 99</strong> (bot CallMeBot).<br />
-              2. Envíale por WhatsApp el mensaje: <em>I allow callmebot to send me messages</em><br />
-              3. El bot te responderá con tu <strong>API key</strong>. Escríbela aquí:
+              Escribe tu número <strong>con código de país</strong> en el campo Teléfono
+              (Ej. +573001234567 para Colombia, +5215512345678 para México) y recibirás las alertas
+              directamente desde el WhatsApp institucional del sistema.
             </p>
             <label class="field">
-              <span>API key de CallMeBot <span class="required">*</span></span>
-              <input v-model.trim="form.whatsapp_apikey" placeholder="Ej. 123456" />
+              <span>API key de CallMeBot (opcional, solo como respaldo)</span>
+              <input v-model.trim="form.whatsapp_apikey" placeholder="Déjalo vacío si no la tienes" />
             </label>
-            <p style="font-size:12px;color:var(--muted);margin-top:4px">
-              Usa tu número con código de país en el campo Teléfono (Ej. +573001234567 o +5215512345678).
-            </p>
           </div>
         </fieldset>
 

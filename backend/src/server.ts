@@ -21,6 +21,12 @@ server.listen(env.port, '0.0.0.0', () => {
   console.log(`API de monitoreo Cafam disponible en el puerto ${env.port}`);
   startMqtt();
 
+  // Bot de WhatsApp (Baileys): se reconecta solo si hay sesión guardada en MySQL.
+  if (process.env.WA_BOT !== 'off') {
+    const { startBot } = require('./services/whatsappBot');
+    startBot().catch((err) => console.error('[wa-bot] no se pudo iniciar:', err.message));
+  }
+
   let checkingDisconnected = false;
   const runDisconnectedCheck = async () => {
     if (checkingDisconnected) return;

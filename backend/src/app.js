@@ -47,6 +47,7 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/audit-logs', require('./routes/auditRoutes'));
 app.use('/api/monitoring', require('./routes/monitoringRoutes'));
 app.use('/api/push', require('./routes/pushRoutes'));
+app.use('/api/whatsapp', require('./routes/whatsappRoutes'));
 
 app.use(errorHandler);
 

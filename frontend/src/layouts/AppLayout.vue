@@ -60,7 +60,7 @@ import { getSocket, disconnectSocket } from '../services/socket';
 import { useRoute, useRouter } from 'vue-router';
 import {
   Activity, AlarmClock, BarChart3, Building2, FileBarChart,
-  Gauge, LogOut, Menu, RadioTower, ShieldCheck, Users, X
+  Gauge, LogOut, Menu, MessageCircle, RadioTower, ShieldCheck, Users, X
 } from '@lucide/vue';
 import { useAuthStore } from '../stores/auth';
 import { humanize } from '../utils/labels';
@@ -96,6 +96,7 @@ const navGroups: NavGroup[] = [
   ] },
   { label: 'Administración', items: [
     { to: '/users', label: 'Usuarios', icon: Users, roles: ['administrador'] },
+    { to: '/whatsapp-bot', label: 'Bot de WhatsApp', icon: MessageCircle, roles: ['administrador'] },
     { to: '/audit', label: 'Auditoría', icon: ShieldCheck, roles: ['administrador', 'calidad'] }
   ] }
 ];

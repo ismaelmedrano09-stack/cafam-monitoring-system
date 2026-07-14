@@ -22,6 +22,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/corrective-actions', redirect: '/alarms' },
   { path: '/reports', component: () => import('../views/ReportsView.vue') },
   { path: '/users', component: () => import('../views/UsersView.vue'), meta: { roles: ['administrador'] } },
+  { path: '/whatsapp-bot', component: () => import('../views/WhatsAppBotView.vue'), meta: { roles: ['administrador'] } },
   { path: '/ranges', redirect: '/sensors' },
   { path: '/audit', component: () => import('../views/AuditView.vue'), meta: { roles: ['administrador', 'calidad'] } },
   { path: '/profile', component: () => import('../views/ProfileView.vue') },
