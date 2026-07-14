@@ -80,12 +80,12 @@
           </div>
           <div class="modal-body">
             <p class="muted" style="margin-bottom:16px">
-              Selecciona un contacto registrado y un sensor. El sistema enviará un correo de alerta de prueba al correo del contacto indicando que es una simulación.
+              Selecciona el sensor y el nivel. El sistema enviará una alerta de prueba (marcada como simulación) a todos los contactos registrados suscritos a ese nivel, o a uno específico si lo eliges.
             </p>
             <label class="field">
               <span>Contacto a notificar</span>
               <select v-model="sim.contact_id">
-                <option value="">— Selecciona un contacto —</option>
+                <option value="all">📢 Todos los contactos registrados</option>
                 <option v-for="c in simContacts" :key="c.id" :value="c.id">
                   {{ c.name }}{{ c.cargo ? ` — ${c.cargo}` : '' }} &lt;{{ c.email }}&gt;
                 </option>
@@ -572,7 +572,7 @@ const simError = ref('');
 const simSuccess = ref('');
 const simContacts = ref<any[]>([]);
 const simSensors = ref<any[]>([]);
-const sim = ref({ contact_id: '', sensor_id: '', level: 'critica' });
+const sim = ref({ contact_id: 'all', sensor_id: '', level: 'critica' });
 
 async function loadSimData() {
   try {
@@ -588,8 +588,8 @@ async function loadSimData() {
 async function sendSimulation() {
   simError.value = '';
   simSuccess.value = '';
-  if (!sim.value.contact_id || !sim.value.sensor_id) {
-    simError.value = 'Debes seleccionar un contacto y un sensor.';
+  if (!sim.value.sensor_id) {
+    simError.value = 'Debes seleccionar un sensor.';
     return;
   }
   simLoading.value = true;
@@ -600,7 +600,7 @@ async function sendSimulation() {
       level: sim.value.level
     });
     simSuccess.value = data.message;
-    sim.value = { contact_id: '', sensor_id: '', level: 'critica' };
+    sim.value = { contact_id: 'all', sensor_id: '', level: 'critica' };
   } catch (err: any) {
     simError.value = err.response?.data?.message || 'No fue posible enviar la simulación.';
   } finally {

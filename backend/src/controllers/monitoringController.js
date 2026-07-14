@@ -335,13 +335,24 @@ async function confirmContact(req, res) {
 
 async function simulateAlert(req, res) {
   const { contact_id, sensor_id, level = 'critica' } = req.body;
-  if (!contact_id || !sensor_id) return fail(res, 'Debes seleccionar un contacto y un sensor', null, 400);
+  if (!sensor_id) return fail(res, 'Debes seleccionar un sensor', null, 400);
   if (!['critica', 'advertencia', 'informativa'].includes(level)) return fail(res, 'El nivel de alarma no es válido', null, 400);
 
-  const [[contact]] = await pool.query("SELECT * FROM notification_contacts WHERE id = ? AND status = 'active'", [contact_id]);
-  if (!contact || !contact.email) return fail(res, 'El contacto no existe, no tiene correo o aún no ha confirmado su suscripción', null, 404);
-  const contactChannels = typeof contact.channels === 'string' ? JSON.parse(contact.channels) : (contact.channels || []);
-  if (!contactChannels.includes('email')) return fail(res, 'El contacto no está suscrito al canal de correo electrónico', null, 400);
+  // contact_id específico → solo ese contacto; sin contact_id (o 'all') → todos los
+  // contactos activos suscritos a ese nivel de alarma.
+  let contactRows;
+  if (contact_id && contact_id !== 'all') {
+    const [rows] = await pool.query("SELECT * FROM notification_contacts WHERE id = ? AND status = 'active'", [contact_id]);
+    contactRows = rows;
+    if (!contactRows.length) return fail(res, 'El contacto no existe o aún no ha confirmado su suscripción', null, 404);
+  } else {
+    const [rows] = await pool.query(
+      "SELECT * FROM notification_contacts WHERE status = 'active' AND JSON_CONTAINS(levels, JSON_QUOTE(?))",
+      [level]
+    );
+    contactRows = rows;
+    if (!contactRows.length) return fail(res, 'No hay contactos activos suscritos a ese nivel de alarma', null, 404);
+  }
 
   const [[sensor]] = await pool.query(`
     SELECT s.*, st.name AS site_name, st.city AS site_city
@@ -374,11 +385,25 @@ async function simulateAlert(req, res) {
     description: `${sensor.name} reporta valores ${level === 'critica' ? 'fuera del rango permitido' : 'cercanos al límite configurado'}`
   };
 
-  const result = await sendSimulatedAlert(contact, sim);
-  await logAudit({ userId: req.user.id, action: 'simulate_alert', entity: 'notification_contacts', entityId: contact_id, description: `Simulación de alerta ${level} enviada a ${contact.email}`, ipAddress: req.ip });
+  const sent = [];
+  const failed = [];
+  for (const contact of contactRows) {
+    try {
+      const result = await sendSimulatedAlert(contact, sim);
+      if (result.skipped) failed.push(`${contact.email} (${result.reason})`);
+      else sent.push(contact.email);
+    } catch (err) {
+      failed.push(`${contact.email} (${err.message})`);
+    }
+  }
 
-  if (result.skipped) return ok(res, 'Simulación registrada pero SMTP no está configurado. Configure SMTP_HOST en .env para enviar correos.', { skipped: true });
-  return ok(res, `Alerta de simulación enviada a ${contact.email}`);
+  await logAudit({ userId: req.user.id, action: 'simulate_alert', entity: 'notification_contacts', entityId: contact_id === 'all' || !contact_id ? null : contact_id, description: `Simulación de alerta ${level}: enviada a ${sent.length} contacto(s)${failed.length ? `, ${failed.length} fallida(s)` : ''}`, ipAddress: req.ip });
+
+  if (!sent.length) return fail(res, `No se pudo enviar la simulación: ${failed.join('; ') || 'sin destinatarios válidos'}`, null, 502);
+  const msg = sent.length === 1
+    ? `Alerta de simulación enviada a ${sent[0]}`
+    : `Alerta de simulación enviada a ${sent.length} contactos: ${sent.join(', ')}`;
+  return ok(res, failed.length ? `${msg}. Fallaron: ${failed.join('; ')}` : msg, { sent, failed });
 }
 
 module.exports = { overview, sites, createSite, updateSite, contacts, createContact, registerContact, confirmContact, simulateAlert, filesBySensor, createDeviceFile, extrema, areas };
