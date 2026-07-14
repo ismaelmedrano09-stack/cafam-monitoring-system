@@ -339,19 +339,25 @@ async function simulateAlert(req, res) {
   if (!['critica', 'advertencia', 'informativa'].includes(level)) return fail(res, 'El nivel de alarma no es válido', null, 400);
 
   // contact_id específico → solo ese contacto; sin contact_id (o 'all') → todos los
-  // contactos activos suscritos a ese nivel de alarma.
+  // contactos de alerta activos suscritos al nivel + todos los usuarios activos del sistema.
   let contactRows;
   if (contact_id && contact_id !== 'all') {
     const [rows] = await pool.query("SELECT * FROM notification_contacts WHERE id = ? AND status = 'active'", [contact_id]);
     contactRows = rows;
     if (!contactRows.length) return fail(res, 'El contacto no existe o aún no ha confirmado su suscripción', null, 404);
   } else {
-    const [rows] = await pool.query(
+    const [alertContacts] = await pool.query(
       "SELECT * FROM notification_contacts WHERE status = 'active' AND JSON_CONTAINS(levels, JSON_QUOTE(?))",
       [level]
     );
-    contactRows = rows;
-    if (!contactRows.length) return fail(res, 'No hay contactos activos suscritos a ese nivel de alarma', null, 404);
+    const [systemUsers] = await pool.query("SELECT id, name, email FROM users WHERE status = 'active'");
+    // Usuarios del sistema como destinatarios de correo (evitando duplicados por email)
+    const seen = new Set(alertContacts.map((c) => String(c.email).toLowerCase()));
+    const userContacts = systemUsers
+      .filter((u) => u.email && !seen.has(String(u.email).toLowerCase()))
+      .map((u) => ({ id: null, name: u.name, cargo: 'Usuario del sistema', email: u.email, phone: null, whatsapp_apikey: null, channels: ['email'], levels: [level] }));
+    contactRows = [...alertContacts, ...userContacts];
+    if (!contactRows.length) return fail(res, 'No hay contactos ni usuarios activos para notificar', null, 404);
   }
 
   const [[sensor]] = await pool.query(`
