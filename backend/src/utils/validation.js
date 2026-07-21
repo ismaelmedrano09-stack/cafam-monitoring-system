@@ -47,6 +47,11 @@ function validateSensor(body) {
     throw validationError('El estado del sensor no es válido.');
   }
 
+  const powerStatus = body.power_status || 'normal';
+  if (!['normal', 'battery', 'offline'].includes(powerStatus)) {
+    throw validationError('El estado de energía del sensor no es válido.');
+  }
+
   const tempMin = numberInRange(body.temp_min, 'La temperatura mínima', -80, 100);
   const tempMax = numberInRange(body.temp_max, 'La temperatura máxima', -80, 100);
   const humidityMin = numberInRange(body.humidity_min, 'La humedad mínima', 0, 100);
@@ -68,6 +73,7 @@ function validateSensor(body) {
     location: requiredText(body.location, 'La ubicación interna'),
     area: requiredText(body.area, 'El área'),
     status,
+    power_status: powerStatus,
     reading_frequency: readingFrequency,
     temp_min: tempMin,
     temp_max: tempMax,
