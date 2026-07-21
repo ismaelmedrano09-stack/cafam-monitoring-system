@@ -1,7 +1,13 @@
 const pool = require('../config/db');
 const { classifyReading, createAlarmIfNeeded } = require('./alarmService');
 
-async function createReading({ sensorCode, sensorId, temperature, humidity, batteryLevel = null, source = 'manual', mqttTopic = null, observations = null, timestamp = null }) {
+async function createReading(input = {}) {
+  // Acepta tanto camelCase (MQTT) como snake_case (formulario manual).
+  const sensorCode = input.sensorCode ?? input.sensor_code ?? null;
+  const sensorId = input.sensorId ?? input.sensor_id ?? null;
+  const { temperature, humidity, source = 'manual', mqttTopic = input.mqtt_topic ?? null, observations = null, timestamp = null } = input;
+  const batteryLevel = input.batteryLevel ?? input.battery_level ?? null;
+
   const [sensors] = sensorCode
     ? await pool.query('SELECT * FROM sensors WHERE code = ? LIMIT 1', [sensorCode])
     : await pool.query('SELECT * FROM sensors WHERE id = ? LIMIT 1', [sensorId]);
