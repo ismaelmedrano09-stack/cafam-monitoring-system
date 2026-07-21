@@ -228,6 +228,28 @@ async function getReportData(type = 'daily') {
     LIMIT 1000
   `);
 
+  // Ediciones de configuración (cambios de rangos de temperatura/humedad) en el periodo.
+  const [thresholdChanges] = await pool.query(`
+    SELECT tc.*, s.code AS sensor_code, s.name AS sensor_name, u.name AS user_name
+    FROM threshold_changes tc
+    JOIN sensors s ON s.id = tc.sensor_id
+    LEFT JOIN users u ON u.id = tc.user_id
+    WHERE tc.created_at >= ${range}
+    ORDER BY tc.created_at DESC
+    LIMIT 1000
+  `).catch(() => [[]]);
+
+  // Vincular cada alarma con las acciones correctivas realizadas sobre ella.
+  const actionsByAlarm = new Map();
+  for (const action of actions) {
+    if (action.alarm_id == null) continue;
+    if (!actionsByAlarm.has(action.alarm_id)) actionsByAlarm.set(action.alarm_id, []);
+    actionsByAlarm.get(action.alarm_id).push(action);
+  }
+  for (const alarm of alarms) {
+    alarm.corrective_actions = actionsByAlarm.get(alarm.id) || [];
+  }
+
   const [[stats]] = await pool.query(`
     SELECT
       COUNT(*) AS total_readings,
@@ -329,6 +351,7 @@ async function getReportData(type = 'daily') {
     readings,
     alarms,
     actions,
+    thresholdChanges,
     byArea,
     bySensor,
     primarySensor,
@@ -562,10 +585,16 @@ function drawEquipmentDetail(doc, analysis, data, user) {
   const sensorAlarms = (data.alarms || []).filter((a) => a.sensor_code === s.code || a.sensor_id === s.id);
   if (y > 680) { doc.addPage(); y = 40; }
   y = sectionHeader(doc, y, 'Riesgo e historial de problemas');
+  const actionText = (a) => {
+    const acts = a.corrective_actions || [];
+    if (acts.length) return acts.map((c) => c.action_taken).join(' · ');
+    return a.status === 'cerrada' ? 'Cerrada sin acción registrada' : 'Pendiente';
+  };
   invimaTable(doc, y, [
-    { label: 'Problema', value: (a) => a.description || titleCase(a.level), width: 260 },
-    { label: 'Asignado a', value: (a) => a.assigned_to || s.responsible || 'Sin asignar', width: 130 },
-    { label: 'Fecha', value: (a) => shortDateTime(a.started_at), width: 125 }
+    { label: 'Problema', value: (a) => a.description || titleCase(a.level), width: 170 },
+    { label: 'Fecha', value: (a) => shortDateTime(a.started_at), width: 90 },
+    { label: 'Acción realizada', value: actionText, width: 155 },
+    { label: 'Responsable', value: (a) => (a.corrective_actions && a.corrective_actions[0]?.user_name) || s.responsible || 'Sin asignar', width: 100 }
   ], sensorAlarms.slice(0, 10), 'Sin problemas registrados');
 
   // Pie institucional
@@ -652,13 +681,42 @@ async function buildPdf({ type, user }) {
   ], data.bySensor, y, { limit: 10 });
 
   doc.addPage();
-  table(doc, 'Alarmas del periodo', [
-    { label: 'Inicio', value: (row) => dateTime(row.started_at), width: 95 },
-    { label: 'Sensor', key: 'sensor_code', width: 70 },
-    { label: 'Nivel', value: (row) => titleCase(row.level), width: 75 },
-    { label: 'Estado', value: (row) => titleCase(row.status), width: 80 },
-    { label: 'Descripción', key: 'description', width: 195 }
-  ], data.alarms, 40, { limit: 24 });
+  // Alarmas con la acción correctiva realizada sobre cada una.
+  const summarizeActions = (alarm) => {
+    const acts = alarm.corrective_actions || [];
+    if (!acts.length) return alarm.status === 'cerrada' ? 'Cerrada sin acción registrada' : 'Sin acción registrada';
+    return acts.map((a) => `${a.action_taken}${a.user_name ? ` (${a.user_name})` : ''}${a.final_status ? ` (${titleCase(a.final_status)})` : ''}`).join(' · ');
+  };
+  let yh = table(doc, 'Alarmas del periodo y acciones realizadas', [
+    { label: 'Inicio', value: (row) => dateTime(row.started_at), width: 80 },
+    { label: 'Sensor', key: 'sensor_code', width: 58 },
+    { label: 'Nivel', value: (row) => titleCase(row.level), width: 62 },
+    { label: 'Estado', value: (row) => titleCase(row.status), width: 62 },
+    { label: 'Descripción', key: 'description', width: 105 },
+    { label: 'Acción realizada', value: summarizeActions, width: 148 }
+  ], data.alarms, 40, { limit: 22 });
+
+  // Ediciones de configuración (cambios de rangos) realizadas en el periodo.
+  const fieldLabel = { temp_min: 'Temp. mínima', temp_max: 'Temp. máxima', humidity_min: 'Humedad mínima', humidity_max: 'Humedad máxima' };
+  if (yh > 660) { doc.addPage(); yh = 40; }
+  yh = table(doc, 'Ediciones de configuración (rangos de sensores)', [
+    { label: 'Fecha', value: (row) => dateTime(row.created_at), width: 95 },
+    { label: 'Sensor', key: 'sensor_code', width: 65 },
+    { label: 'Campo', value: (row) => fieldLabel[row.field_changed] || row.field_changed, width: 90 },
+    { label: 'Antes / Después', value: (row) => `${row.old_value} a ${row.new_value}`, width: 95 },
+    { label: 'Responsable', value: (row) => row.user_name || 'Sistema', width: 90 },
+    { label: 'Justificación', key: 'justification', width: 78 }
+  ], data.thresholdChanges || [], yh, { limit: 18 });
+
+  // Detalle de acciones correctivas registradas en el periodo.
+  if (yh > 620) { doc.addPage(); yh = 40; }
+  table(doc, 'Acciones correctivas registradas', [
+    { label: 'Fecha', value: (row) => dateTime(row.created_at), width: 95 },
+    { label: 'Sensor', key: 'sensor_code', width: 65 },
+    { label: 'Responsable', key: 'user_name', width: 95 },
+    { label: 'Acción realizada', key: 'action_taken', width: 165 },
+    { label: 'Resultado', value: (row) => titleCase(row.final_status), width: 93 }
+  ], data.actions || [], yh, { limit: 20 });
 
   doc.addPage();
   table(doc, 'Últimas lecturas registradas', [
@@ -955,14 +1013,37 @@ async function buildExcel({ type, user }) {
   const actions = workbook.addWorksheet('Acciones correctivas');
   actions.columns = [
     { header: 'Fecha', key: 'created_at', width: 24 },
+    { header: 'Alarma #', key: 'alarm_id', width: 10 },
     { header: 'Sensor', key: 'sensor_code', width: 14 },
     { header: 'Dispositivo', key: 'sensor_name', width: 30 },
-    { header: 'Usuario', key: 'user_name', width: 24 },
-    { header: 'Acción', key: 'action_taken', width: 60 },
+    { header: 'Responsable', key: 'user_name', width: 24 },
+    { header: 'Acción realizada', key: 'action_taken', width: 60 },
+    { header: 'Observaciones', key: 'observations', width: 40 },
     { header: 'Resultado', key: 'final_status', width: 24 }
   ];
   actions.addRows(data.actions.map((action) => ({ ...action, created_at: dateTime(action.created_at) })));
   styleSheet(actions, { tabColor: XLSX_COLORS.yellow, headerColor: XLSX_COLORS.yellow });
+
+  // Hoja de ediciones de configuración (cambios de rangos de sensores).
+  const fieldLabelXls = { temp_min: 'Temp. mínima', temp_max: 'Temp. máxima', humidity_min: 'Humedad mínima', humidity_max: 'Humedad máxima' };
+  const edits = workbook.addWorksheet('Ediciones de configuración');
+  edits.columns = [
+    { header: 'Fecha', key: 'created_at', width: 24 },
+    { header: 'Sensor', key: 'sensor_code', width: 14 },
+    { header: 'Dispositivo', key: 'sensor_name', width: 30 },
+    { header: 'Campo modificado', key: 'field', width: 20 },
+    { header: 'Valor anterior', key: 'old_value', width: 14 },
+    { header: 'Valor nuevo', key: 'new_value', width: 14 },
+    { header: 'Responsable', key: 'user_name', width: 24 },
+    { header: 'Justificación', key: 'justification', width: 40 }
+  ];
+  edits.addRows((data.thresholdChanges || []).map((tc) => ({
+    ...tc,
+    created_at: dateTime(tc.created_at),
+    field: fieldLabelXls[tc.field_changed] || tc.field_changed,
+    user_name: tc.user_name || 'Sistema'
+  })));
+  styleSheet(edits, { tabColor: XLSX_COLORS.blue2, headerColor: XLSX_COLORS.blue2 });
 
   // Hoja de análisis por equipo: picos con marca de tiempo, MKT y tiempo fuera de rango.
   const analysisSheet = workbook.addWorksheet('Análisis por equipo');
