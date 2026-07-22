@@ -1,0 +1,12 @@
+{
+  "name": "cafam-serial-bridge",
+  "version": "1.0.0",
+  "description": "Puente USB (Serial) a MQTT para Cafam Monitoring - envía lecturas del ESP32 a la nube sin WiFi",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@serialport/parser-readline": "^12.0.0",
+    "mqtt": "^5.10.1",
+    "serialport": "^12.0.0"
+  }
+}
