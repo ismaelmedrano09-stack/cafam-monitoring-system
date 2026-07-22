@@ -276,6 +276,7 @@ import AsyncState from '../components/AsyncState.vue';
 import StatCard from '../components/StatCard.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import api from '../services/api';
+import { getSocket } from '../services/socket';
 import { humanize } from '../utils/labels';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Tooltip, Legend);
@@ -616,13 +617,29 @@ function openSimModal() {
   if (!simContacts.value.length) loadSimData();
 }
 
+// Actualización en tiempo real: cuando llega una lectura nueva por WebSocket,
+// refresca el panel al instante (con un pequeño debounce para no saturar).
+let liveTimer: ReturnType<typeof setTimeout> | undefined;
+function onNewReading() {
+  if (!autoRefresh.value) return;
+  if (liveTimer) return;
+  liveTimer = setTimeout(() => { liveTimer = undefined; load(false); }, 800);
+}
+
 onMounted(() => {
   load(true);
   timer = setInterval(() => {
     if (autoRefresh.value) load(false);
   }, 15000);
+  const sock = getSocket();
+  sock?.on('new_reading', onNewReading);
+  sock?.on('new_alarm', onNewReading);
 });
 onUnmounted(() => {
   if (timer) clearInterval(timer);
+  if (liveTimer) clearTimeout(liveTimer);
+  const sock = getSocket();
+  sock?.off('new_reading', onNewReading);
+  sock?.off('new_alarm', onNewReading);
 });
 </script>

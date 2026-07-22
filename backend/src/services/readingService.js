@@ -51,6 +51,22 @@ async function createReading(input = {}) {
   };
 
   await createAlarmIfNeeded(sensor, reading);
+
+  // Empujar la lectura en tiempo real a los clientes conectados (WebSocket).
+  try {
+    const io = require('../app').get('io');
+    if (io) io.emit('new_reading', {
+      sensor_id: sensor.id,
+      sensor_code: sensor.code,
+      sensor_name: sensor.name,
+      area: sensor.area,
+      temperature: reading.temperature,
+      humidity: reading.humidity,
+      calculated_status: reading.calculated_status,
+      created_at: reading.created_at
+    });
+  } catch {}
+
   return reading;
 }
 

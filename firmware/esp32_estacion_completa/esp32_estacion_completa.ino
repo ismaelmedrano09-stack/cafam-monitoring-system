@@ -38,7 +38,8 @@ const char* CODE_HABITACION = "HAB-01";
 const char* CODE_NEVERA     = "NEV-01";
 
 // Cada cuánto ENVIAR a la nube (ms). El OLED sigue refrescando cada 2 s.
-const unsigned long PUBLISH_MS = 60000; // 60 s
+// 10 s = actualización casi en tiempo real. Súbelo a 60000 (1 min) para ahorrar datos.
+const unsigned long PUBLISH_MS = 10000; // 10 s
 // ======================================================
 
 // ======================================================
@@ -83,13 +84,19 @@ WiFiClientSecure netClient;
 PubSubClient mqtt(netClient);
 unsigned long ultimaPublicacion = 0;
 unsigned long ultimoIntentoMqtt = 0;
+unsigned long ultimoIntentoWifi = 0;
 bool netOk = false;
 
 void intentarConectarRed() {
-  // WiFi (no bloquea; solo lo arranca si no está conectado)
+  // WiFi: NO llamar begin() en cada ciclo (interrumpe la conexión).
+  // Solo reintenta cada 20 s si sigue sin conectar.
   if (WiFi.status() != WL_CONNECTED) {
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     netOk = false;
+    if (millis() - ultimoIntentoWifi > 20000) {
+      ultimoIntentoWifi = millis();
+      WiFi.disconnect();
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    }
     return;
   }
   // MQTT: reintenta como máximo cada 15 s para no congelar el loop
