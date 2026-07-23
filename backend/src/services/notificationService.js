@@ -176,6 +176,37 @@ async function queueAlarmNotifications(alarmId, sensorId, level) {
       );
     }
   }
+
+  // Además, notificar por correo a los USUARIOS activos del sistema (cuentas registradas),
+  // evitando duplicar correos que ya recibieron los contactos de alerta.
+  if (alarm && sensor) {
+    const yaNotificados = new Set(contacts.map((c) => String(c.email || '').toLowerCase()));
+    const [users] = await pool.query("SELECT id, name, email FROM users WHERE status = 'active' AND email IS NOT NULL").catch(() => [[]]);
+    for (const user of users) {
+      const email = String(user.email || '').toLowerCase();
+      if (!email || yaNotificados.has(email)) continue;
+      yaNotificados.add(email);
+      let status = 'queued';
+      let providerMessage = 'En cola';
+      try {
+        const result = await sendEmail(
+          user.email,
+          `[Cafam Telemetría] Alarma ${level}: ${sensor.code}`,
+          alarmEmailHtml(alarm, sensor, { name: user.name })
+        );
+        status = result.skipped ? 'queued' : 'sent';
+        providerMessage = result.skipped ? result.reason : `Enviado via ${result.provider || 'SMTP'} (usuario)`;
+      } catch (err) {
+        status = 'failed';
+        providerMessage = err.message;
+      }
+      await pool.query(
+        `INSERT INTO notification_logs (alarm_id, contact_id, channel, destination, status, provider_message)
+         VALUES (?, NULL, 'email', ?, ?, ?)`,
+        [alarmId, user.email, status, providerMessage]
+      );
+    }
+  }
 }
 
 function confirmationEmailHtml(contact, siteName, token) {
